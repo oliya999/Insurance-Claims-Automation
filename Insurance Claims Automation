@@ -1,0 +1,91 @@
+import pandas as pd
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import re
+
+# Step 1: Data Extraction (Simulating claim submission via CSV)
+def read_claim_data(file_path):
+    # Simulate reading claim data from CSV (this could be an API call, email, or web form in real life)
+    return pd.read_csv(file_path)
+
+# Step 2: Data Validation (Check for required fields and correct format)
+def validate_claim(claim):
+    # Example validation checks
+    # Validate Policy Number (Should be in format XXXX-YYYYYY, e.g., 1234-567890)
+    if not re.match(r"^\d{4}-\d{6}$", claim['policy_number']):
+        return False, "Invalid policy number format"
+    
+    # Ensure all required fields are filled
+    required_fields = ['policy_number', 'claimant_name', 'incident_date', 'claim_amount']
+    for field in required_fields:
+        if pd.isnull(claim[field]) or claim[field] == '':
+            return False, f"Missing field: {field}"
+    
+    return True, "Claim data is valid"
+
+# Step 3: Claim Decision (Apply Rules)
+def process_claim(claim):
+    # Example decision rule: Claims over $10,000 need manual review
+    claim_amount = claim['claim_amount']
+    
+    if claim_amount > 10000:
+        return 'manual review', f"Claim amount is {claim_amount}, needs manual review."
+    else:
+        return 'approved', f"Claim amount is {claim_amount}, claim approved."
+
+# Step 4: Send Email Notifications
+def send_email(recipient, subject, body):
+    sender_email = "your_email@example.com"
+    password = "your_password"
+    
+    # Set up the email
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = recipient
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+    
+    # Connect to the email server and send email
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, password)
+        text = msg.as_string()
+        server.sendmail(sender_email, recipient, text)
+        server.quit()
+        print(f"Email sent to {recipient}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+# Step 5: Main Function to Automate the Process
+def automate_claims(file_path):
+    # Read the claim data
+    claims = read_claim_data(file_path)
+    
+    for index, claim in claims.iterrows():
+        print(f"\nProcessing claim for {claim['claimant_name']} (Policy: {claim['policy_number']})")
+        
+        # Validate claim data
+        is_valid, message = validate_claim(claim)
+        if not is_valid:
+            print(f"Error: {message}")
+            # Send rejection email
+            send_email(claim['email'], "Claim Rejection", f"Your claim cannot be processed. Reason: {message}")
+            continue  # Skip to next claim
+        
+        # Process claim decision
+        status, status_message = process_claim(claim)
+        print(status_message)
+        
+        # Send notification based on the claim status
+        if status == 'approved':
+            send_email(claim['email'], "Claim Approval", f"Your claim has been approved! {status_message}")
+        else:
+            send_email(claim['email'], "Claim Status: Manual Review", f"Your claim needs manual review. {status_message}")
+
+# Example CSV file with claim data (You should replace this with an actual file path)
+file_path = "claims_data.csv"  # Your CSV file path
+
+# Run the automation process
+automate_claims(file_path)
